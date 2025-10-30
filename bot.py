@@ -6,7 +6,7 @@ from aiogram.utils import executor
 from aiogram.utils.exceptions import ConflictError
 
 # === Настройки ===
-BOT_TOKEN = "8213820981:AAFQxheMDuj2k1yMkpucpULInt2Xsh4qUCk"  # вставь свой Telegram токен
+BOT_TOKEN = "8213820981:AAHkls9iAujHNu126nX2d9ppdMJpvzMZoiA"  # вставь свой Telegram токен
 RAPIDAPI_KEY = "3ed5fdda73mshfec256005e6f066p1a0e68jsn8a3add5d7863"
 
 # === Логирование ===
