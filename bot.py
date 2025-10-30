@@ -42,10 +42,12 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "✅ Bot is running and connected to Render!"
 
 def run_flask():
-    app.run(host="0.0.0.0", port=10000)
+    # ⚠️ Используем порт из переменной окружения, как требует Render
+    port = int(os.getenv("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 async def main():
     threading.Thread(target=run_flask).start()
@@ -53,4 +55,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
