@@ -3,6 +3,8 @@ import os
 import re
 import requests
 import asyncio
+import threading
+from flask import Flask
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
@@ -35,14 +37,7 @@ async def handle_name(message: types.Message):
     reply = get_birth_date(player_name)
     await message.answer(reply)
 
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
-import threading
-from flask import Flask
-
+# Flask web server for Render
 app = Flask(__name__)
 
 @app.route('/')
@@ -52,6 +47,10 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-if __name__ == "__main__":
+async def main():
     threading.Thread(target=run_flask).start()
-    executor.start_polling(dp, skip_updates=True)
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
