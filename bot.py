@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import requests
 import asyncio
 import threading
@@ -14,88 +13,55 @@ API_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
+RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 
-# ---- функция для поиска даты рождения ----
 def get_birth_date(player_name):
-    # прокси для обхода блокировок Render
-    proxies = {
-        "http": "http://proxy.scrapeops.io:8080",
-        "https": "http://proxy.scrapeops.io:8080"
-    }
-
-    # сначала ищем имя на Википедии
-    search_url = "https://ru.wikipedia.org/w/api.php"
-    params = {
-        "action": "query",
-        "list": "search",
-        "srsearch": player_name,
-        "utf8": "",
-        "format": "json"
+    url = "https://wikipedia-api3.p.rapidapi.com/wiki"
+    querystring = {"action": "get_summary", "title": player_name}
+    headers = {
+        "x-rapidapi-key": RAPID_API_KEY,
+        "x-rapidapi-host": "wikipedia-api3.p.rapidapi.com"
     }
 
     try:
-        r = requests.get(search_url, params=params, proxies=proxies, timeout=10)
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        response.raise_for_status()
+        data = response.json()
     except Exception as e:
-        return f"⚠️ Ошибка при подключении к Википедии: {e}"
+        return f"⚠️ Ошибка при подключении к API: {e}"
 
-    if r.status_code != 200:
+    extract = data.get("summary", "")
+    if not extract:
         return "⚠️ Не удалось получить данные с Википедии."
 
-    data = r.json()
-    results = data.get("query", {}).get("search", [])
-    if not results:
-        return "⚠️ Не удалось найти информацию."
-
-    # берём первую найденную страницу
-    title = results[0]["title"]
-    url = f"https://ru.wikipedia.org/api/rest_v1/page/summary/{title}"
-
-    try:
-        r = requests.get(url, proxies=proxies, timeout=10)
-    except Exception as e:
-        return f"⚠️ Ошибка при запросе страницы: {e}"
-
-    if r.status_code != 200:
-        return "⚠️ Не удалось получить страницу Википедии."
-
-    data = r.json()
-    text = data.get("extract", "")
-
-    # ищем дату рождения в тексте
-    match = re.search(r"родил[аc][ась]?\s*(\d{1,2}\s+[а-я]+\s+\d{4})", text)
+    import re
+    match = re.search(r"(\d{1,2}\s+[а-я]+\s+\d{4})", extract)
     if match:
-        return f"🎉 {title} родился {match.group(1)}"
+        return f"🎉 Родился {match.group(1)}"
     else:
-        return f"⚠️ Дата рождения {title} не найдена."
+        return f"⚽ {player_name}: дата рождения не найдена."
 
-
-# ---- команды бота ----
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer("⚽ Напиши имя футболиста (например: Салах, Месси, Роналду) — я скажу дату рождения!")
 
-
 @dp.message()
 async def handle_name(message: types.Message):
-    player_name = message.text.strip().capitalize()
+    player_name = message.text.strip()
     reply = get_birth_date(player_name)
     await message.answer(reply)
 
-
-# ---- Flask веб-сервер для Render ----
+# Flask сервер для Render
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "✅ Bot is running and connected to Render!"
+    return "✅ Bot is running with RapidAPI (Wikipedia API3)"
 
 def run_flask():
-    # Render требует порт из переменной окружения
     port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-
-# ---- запуск ----
 async def main():
     threading.Thread(target=run_flask).start()
     await dp.start_polling(bot)
