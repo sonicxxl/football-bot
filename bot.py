@@ -15,17 +15,39 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 def get_birth_date(player_name):
-    url = f"https://ru.wikipedia.org/api/rest_v1/page/summary/{player_name}"
+    # Пробуем искать не только точное имя, но и первую найденную страницу
+    search_url = f"https://ru.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "list": "search",
+        "srsearch": player_name,
+        "utf8": "",
+        "format": "json"
+    }
+    r = requests.get(search_url, params=params)
+    if r.status_code != 200:
+        return "⚠️ Не удалось получить данные с Википедии."
+
+    data = r.json()
+    results = data.get("query", {}).get("search", [])
+    if not results:
+        return "⚠️ Не удалось найти информацию."
+
+    # Берем первую подходящую страницу
+    title = results[0]["title"]
+    url = f"https://ru.wikipedia.org/api/rest_v1/page/summary/{title}"
     r = requests.get(url)
     if r.status_code != 200:
         return "⚠️ Не удалось найти информацию."
+
     data = r.json()
     text = data.get("extract", "")
     match = re.search(r"родил[аc][ась]?\s*(\d{1,2}\s+[а-я]+\s+\d{4})", text)
     if match:
-        return f"🎉 Родился {match.group(1)}"
+        return f"🎉 {title} родился {match.group(1)}"
     else:
-        return "⚠️ Дата рождения не найдена."
+        return f"⚠️ Дата рождения {title} не найдена."
+
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
