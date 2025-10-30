@@ -1,74 +1,71 @@
 import logging
-import os
-import re
-import requests
 import asyncio
-import threading
-from flask import Flask
+import requests
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from aiogram.utils import executor
+from aiogram.utils.exceptions import ConflictError
 
+# === Настройки ===
+BOT_TOKEN = "8213820981:AAFQxheMDuj2k1yMkpucpULInt2Xsh4qUCk"  # вставь свой Telegram токен
+RAPIDAPI_KEY = "3ed5fdda73mshfec256005e6f066p1a0e68jsn8a3add5d7863"
+
+# === Логирование ===
 logging.basicConfig(level=logging.INFO)
 
-API_TOKEN = os.getenv("BOT_TOKEN")
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+# === Инициализация бота ===
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
 
-# === ⚙️ Функция для получения даты рождения футболиста через RapidAPI ===
-def get_birth_date(player_name):
+
+# === Команда /start ===
+@dp.message_handler(commands=["start"])
+async def start_command(message: types.Message):
+    await message.answer("Привет! 🔍 Отправь мне любое слово, и я найду информацию из Википедии.")
+
+
+# === Поиск статьи через Wikipedia API на RapidAPI ===
+@dp.message_handler()
+async def wiki_search(message: types.Message):
+    query = message.text.strip()
     url = "https://wikipedia-api3.p.rapidapi.com/wiki"
+    params = {"action": "get_summary", "title": query}
     headers = {
-        "x-rapidapi-key": "3ed5fdda73mshfec256005e6f066p1a0e68jsn8a3add5d7863",  # твой ключ
+        "x-rapidapi-key": RAPIDAPI_KEY,
         "x-rapidapi-host": "wikipedia-api3.p.rapidapi.com"
     }
-    params = {"action": "get_summary", "title": player_name}
 
     try:
-        r = requests.get(url, headers=headers, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-
-        # Проверяем содержимое
-        extract = data.get("extract", "")
-        if not extract:
-            return "⚠️ Не удалось получить данные с Википедии."
-
-        match = re.search(r"родил[аc][ась]?\s*(\d{1,2}\s+[а-я]+\s+\d{4})", extract)
-        if match:
-            return f"🎉 Родился {match.group(1)}"
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            summary = data.get("summary", "❌ Ничего не найдено.")
+            await message.answer(summary[:4000])  # Telegram лимит
+        elif response.status_code == 404:
+            await message.answer("⚠️ Статья не найдена.")
+        elif response.status_code == 403:
+            await message.answer("🚫 Ошибка 403: Проверь RapidAPI ключ и хост.")
         else:
-            return "⚠️ Дата рождения не найдена."
-    except requests.exceptions.RequestException as e:
-        return f"⚠️ Ошибка при подключении к API: {e}"
+            await message.answer(f"⚠️ Ошибка {response.status_code}: {response.text}")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при подключении к API: {e}")
 
-# === Телеграм команды ===
-@dp.message(Command("start"))
-async def start(message: types.Message):
-    await message.answer("⚽ Напиши имя футболиста (например: Салах, Месси, Роналду) — я скажу дату рождения!")
 
-@dp.message()
-async def handle_name(message: types.Message):
-    player_name = message.text.strip().capitalize()
-    reply = get_birth_date(player_name)
-    await message.answer(reply)
+# === Запуск с защитой от конфликтов polling ===
+async def run_bot():
+    print("🚀 Бот запускается... ждём 10 секунд, чтобы завершился старый процесс")
+    await asyncio.sleep(10)
 
-# === Flask для Render ===
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host="0.0.0.0", port=10000)
-
-async def main():
-    threading.Thread(target=run_flask).start()
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    while True:
+        try:
+            print("✅ Polling Telegram...")
+            await dp.start_polling()
+        except ConflictError:
+            print("⚠️ Обнаружен конфликт polling — ждём 15 секунд и пробуем снова...")
+            await asyncio.sleep(15)
+        except Exception as e:
+            print(f"❌ Ошибка: {e} — перезапуск через 20 секунд...")
+            await asyncio.sleep(20)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_bot())
